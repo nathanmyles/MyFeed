@@ -180,6 +180,24 @@ body {
   cursor: pointer;
 }
 
+.add-friend-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: #242424;
+  border-radius: 8px;
+}
+
+.add-friend-section h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.add-friend-section p {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .connect-form {
   display: flex;
   gap: 0.5rem;
@@ -308,6 +326,35 @@ body {
 }
 
 .peer-id-section small {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.peer-address-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: #242424;
+  border-radius: 8px;
+}
+
+.peer-address-section label {
+  display: block;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.5rem;
+}
+
+.peer-address-section .peer-address {
+  display: block;
+  font-family: monospace;
+  font-size: 0.75rem;
+  word-break: break-all;
+  background-color: #1a1a1a;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.peer-address-section small {
   color: rgba(255, 255, 255, 0.5);
 }
 

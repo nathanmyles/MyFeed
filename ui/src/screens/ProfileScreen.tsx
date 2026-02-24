@@ -29,7 +29,12 @@ export function ProfileScreen() {
       <div className="peer-id-section">
         <label>Your Peer ID:</label>
         <div className="peer-id">{status?.peerId || profile?.peerId}</div>
-        <small>Share this with friends so they can connect to you</small>
+      </div>
+
+      <div className="peer-address-section">
+        <label>Your Address:</label>
+        <code className="peer-address">{status?.addresses?.[0]}</code>
+        <small>Share this with friends on different networks to connect</small>
       </div>
 
       <form onSubmit={handleSubmit} className="profile-form">

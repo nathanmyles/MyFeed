@@ -39,18 +39,22 @@ export function PeersScreen() {
         <button onClick={() => refetch()}>Refresh</button>
       </div>
 
-      <form onSubmit={handleConnect} className="connect-form">
-        <input
-          type="text"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Peer address (e.g., /ip4/127.0.0.1/tcp/12345/p2p/12D3KooW...)"
-        />
-        <button type="submit" disabled={connectPeer.isPending || !address.trim()}>
-          {connectPeer.isPending ? 'Connecting...' : 'Connect'}
-        </button>
-        {error2 && <div className="connect-error">{error2}</div>}
-      </form>
+      <div className="add-friend-section">
+        <h3>Add Friend</h3>
+        <p>Enter a friend's address from their Profile page to connect</p>
+        <form onSubmit={handleConnect} className="connect-form">
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="/ip4/1.2.3.4/tcp/12345/p2p/12D3KooW..."
+          />
+          <button type="submit" disabled={connectPeer.isPending || !address.trim()}>
+            {connectPeer.isPending ? 'Connecting...' : 'Add Friend'}
+          </button>
+          {error2 && <div className="connect-error">{error2}</div>}
+        </form>
+      </div>
 
       <div className="peers-list">
         {peers?.map((peer) => (

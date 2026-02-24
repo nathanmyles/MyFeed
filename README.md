@@ -100,6 +100,15 @@ make ui-dev
 | `/socialapp/feed/1.0.0`       | Exchange posts (newline-delimited JSON) |
 | `/socialapp/profile/1.0.0`    | Exchange profile (JSON)                 |
 
+## Security & Cryptography
+
+Posts are cryptographically signed using **Ed25519** to ensure authenticity and integrity:
+
+- **Key Management**: Each peer has an Ed25519 key pair stored in `~/.myfeed/identity.key`. The same key is used for both libp2p identity and post signing.
+- **Signing**: When creating a post, it's signed using the format `ID|Content|Timestamp`.
+- **Verification**: When syncing posts from remote peers, signatures are verified using the public key derived from the author's peer ID (`peer.ID.ExtractPublicKey()`). Posts with invalid signatures are rejected.
+- **Transport**: All P2P communication is encrypted using the Noise protocol.
+
 ## Development
 
 ### Daemon

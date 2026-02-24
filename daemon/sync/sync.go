@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/nathanmyles/myfeed/daemon/node"
 	"github.com/nathanmyles/myfeed/daemon/protocols"
 	"github.com/nathanmyles/myfeed/daemon/store"
 )
@@ -51,6 +52,17 @@ func (s *Syncer) FetchFeed(ctx context.Context, peerID peer.ID, since time.Time)
 	}
 
 	for _, post := range posts {
+		sigData := fmt.Sprintf("%s|%s|%d", post.ID, post.Content, post.CreatedAt.Unix())
+		verified, err := node.VerifySignature(post.AuthorPeerID, []byte(sigData), post.Signature)
+		if err != nil {
+			fmt.Printf("Error verifying signature for post %s: %v\n", post.ID, err)
+			continue
+		}
+		if !verified {
+			fmt.Printf("Invalid signature for post %s from %s\n", post.ID, post.AuthorPeerID)
+			continue
+		}
+
 		if err := s.store.SaveRemotePost(&post); err != nil {
 			fmt.Printf("Error saving remote post %s: %v\n", post.ID, err)
 		}

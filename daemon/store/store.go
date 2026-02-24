@@ -14,6 +14,7 @@ type Post struct {
 	Content      string    `json:"content"`
 	CreatedAt    time.Time `json:"createdAt"`
 	Attachments  []string  `json:"attachments,omitempty"`
+	Signature    string    `json:"signature"`
 }
 
 type Profile struct {
@@ -136,6 +137,31 @@ func (s *Store) SaveRemotePost(post *Post) error {
 	}
 	return s.db.Update(func(txn *badger.Txn) error {
 		return txn.Set([]byte("post:all:"+post.ID), data)
+	})
+}
+
+func (s *Store) UpdatePostSignature(id, signature string) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("post:all:" + id))
+		if err != nil {
+			return err
+		}
+		var post Post
+		err = item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &post)
+		})
+		if err != nil {
+			return err
+		}
+		post.Signature = signature
+		data, err := json.Marshal(post)
+		if err != nil {
+			return err
+		}
+		if err := txn.Set([]byte("post:local:"+id), data); err != nil {
+			return err
+		}
+		return txn.Set([]byte("post:all:"+id), data)
 	})
 }
 

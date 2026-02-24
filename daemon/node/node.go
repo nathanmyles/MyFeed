@@ -38,6 +38,7 @@ type Node struct {
 	Host    host.Host
 	DHT     *dht.IpfsDHT
 	mdnsSvc mdns.Service
+	privKey crypto.PrivKey
 }
 
 func loadOrGenerateKey(keyPath string) (crypto.PrivKey, error) {
@@ -107,6 +108,7 @@ func New(ctx context.Context, dataDir string) (*Node, error) {
 		Host:    h,
 		DHT:     kadDHT,
 		mdnsSvc: mdnsSvc,
+		privKey: priv,
 	}, nil
 }
 
@@ -186,4 +188,40 @@ func (n *Node) WaitForDHTConnection(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (n *Node) Sign(data []byte) (string, error) {
+	sig, err := n.privKey.Sign(data)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(sig), nil
+}
+
+func (n *Node) GetPublicKey() crypto.PubKey {
+	return n.privKey.GetPublic()
+}
+
+func VerifySignature(peerID string, data []byte, signatureHex string) (bool, error) {
+	pid, err := peer.Decode(peerID)
+	if err != nil {
+		return false, err
+	}
+
+	pubKey, err := pid.ExtractPublicKey()
+	if err != nil {
+		return false, err
+	}
+
+	sigBytes, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		return false, err
+	}
+
+	verified, err := pubKey.Verify(data, sigBytes)
+	if err != nil {
+		return false, err
+	}
+
+	return verified, nil
 }

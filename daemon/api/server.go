@@ -15,12 +15,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/nathanmyles/myfeed/daemon/node"
 	"github.com/nathanmyles/myfeed/daemon/store"
 	syncer "github.com/nathanmyles/myfeed/daemon/sync"
 )
 
 type Server struct {
 	host      host.Host
+	node      *node.Node
 	store     *store.Store
 	syncer    *syncer.Syncer
 	port      int
@@ -36,7 +38,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func NewServer(h host.Host, s *store.Store, syn *syncer.Syncer, dataDir string) (*Server, error) {
+func NewServer(n *node.Node, s *store.Store, syn *syncer.Syncer, dataDir string) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
@@ -51,7 +53,8 @@ func NewServer(h host.Host, s *store.Store, syn *syncer.Syncer, dataDir string) 
 	}
 
 	srv := &Server{
-		host:      h,
+		host:      n.Host,
+		node:      n,
 		store:     s,
 		syncer:    syn,
 		port:      port,
@@ -163,6 +166,19 @@ func (s *Server) handlePosts(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.SavePost(post); err != nil {
 		s.jsonError(w, "Failed to save post", 500)
+		return
+	}
+
+	sigData := fmt.Sprintf("%s|%s|%d", post.ID, post.Content, post.CreatedAt.Unix())
+	signature, err := s.node.Sign([]byte(sigData))
+	if err != nil {
+		s.jsonError(w, "Failed to sign post", 500)
+		return
+	}
+	post.Signature = signature
+
+	if err := s.store.UpdatePostSignature(post.ID, post.Signature); err != nil {
+		s.jsonError(w, "Failed to update signature", 500)
 		return
 	}
 

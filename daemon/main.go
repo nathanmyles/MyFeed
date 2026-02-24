@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/nathanmyles/myfeed/daemon/api"
 	"github.com/nathanmyles/myfeed/daemon/node"
 	"github.com/nathanmyles/myfeed/daemon/protocols"
@@ -90,10 +92,43 @@ func main() {
 
 	go syncWorker.Start(ctx)
 
+	go connectToKnownPeers(ctx, node, store, syncer)
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
 	fmt.Println("\nShutting down...")
 	cancel()
+}
+
+func connectToKnownPeers(ctx context.Context, n *node.Node, s *store.Store, syncer *sync.Syncer) {
+	profiles := s.GetKnownPeersWithProfiles()
+
+	for _, profile := range profiles {
+		if len(profile.Addresses) == 0 {
+			continue
+		}
+		for _, addr := range profile.Addresses {
+			peerInfo, err := peer.AddrInfoFromString(addr)
+			if err != nil {
+				continue
+			}
+			if n.Host.Network().Connectedness(peerInfo.ID) == network.Connected {
+				continue
+			}
+			fmt.Printf("Connecting to known peer: %s\n", profile.PeerID)
+			if err := n.Host.Connect(ctx, *peerInfo); err != nil {
+				fmt.Printf("Failed to connect to %s: %v\n", profile.PeerID, err)
+				continue
+			}
+			fmt.Printf("Connected to known peer: %s\n", profile.PeerID)
+
+			if syncer != nil {
+				pid, _ := peer.Decode(profile.PeerID)
+				syncer.FetchFeed(ctx, pid, time.Time{})
+			}
+			break
+		}
+	}
 }

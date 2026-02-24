@@ -90,7 +90,7 @@ func (s *Syncer) FetchProfile(ctx context.Context, peerID peer.ID) (*store.Profi
 	}
 
 	profile.PeerID = peerID.String()
-	if err := s.store.SaveRemoteProfile(&profile); err != nil {
+	if err := s.store.SaveRemoteProfileMerge(&profile); err != nil {
 		return nil, fmt.Errorf("failed to save remote profile: %w", err)
 	}
 

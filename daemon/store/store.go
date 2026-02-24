@@ -18,10 +18,11 @@ type Post struct {
 }
 
 type Profile struct {
-	PeerID      string `json:"peerId"`
-	DisplayName string `json:"displayName"`
-	Bio         string `json:"bio"`
-	AvatarHash  string `json:"avatarHash,omitempty"`
+	PeerID      string   `json:"peerId"`
+	DisplayName string   `json:"displayName"`
+	Bio         string   `json:"bio"`
+	AvatarHash  string   `json:"avatarHash,omitempty"`
+	Addresses   []string `json:"addresses,omitempty"`
 }
 
 type Store struct {
@@ -206,6 +207,34 @@ func (s *Store) SaveRemoteProfile(profile *Profile) error {
 	})
 }
 
+func (s *Store) SaveRemoteProfileMerge(profile *Profile) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("profile:remote:" + profile.PeerID))
+		if err != nil && err != badger.ErrKeyNotFound {
+			return err
+		}
+
+		var existingProfile Profile
+		if err == nil {
+			err = item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &existingProfile)
+			})
+			if err != nil {
+				return err
+			}
+			if len(existingProfile.Addresses) > 0 {
+				profile.Addresses = existingProfile.Addresses
+			}
+		}
+
+		data, err := json.Marshal(profile)
+		if err != nil {
+			return err
+		}
+		return txn.Set([]byte("profile:remote:"+profile.PeerID), data)
+	})
+}
+
 func (s *Store) GetRemoteProfile(peerID string) (*Profile, error) {
 	var profile Profile
 	err := s.db.View(func(txn *badger.Txn) error {
@@ -246,4 +275,27 @@ func (s *Store) GetKnownPeers() []string {
 		return nil
 	})
 	return peers
+}
+
+func (s *Store) GetKnownPeersWithProfiles() []*Profile {
+	var profiles []*Profile
+	s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte("profile:remote:")
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			var profile Profile
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &profile)
+			})
+			if err != nil {
+				continue
+			}
+			profiles = append(profiles, &profile)
+		}
+		return nil
+	})
+	return profiles
 }

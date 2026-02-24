@@ -253,7 +253,10 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile := &store.Profile{PeerID: peerInfo.ID.String()}
+	profile := &store.Profile{
+		PeerID:    peerInfo.ID.String(),
+		Addresses: []string{req.Address},
+	}
 	s.store.SaveRemoteProfile(profile)
 
 	s.BroadcastEvent("peer:connected", map[string]string{"peerId": peerInfo.ID.String()})

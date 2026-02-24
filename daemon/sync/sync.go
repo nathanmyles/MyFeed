@@ -56,6 +56,12 @@ func (s *Syncer) FetchFeed(ctx context.Context, peerID peer.ID, since time.Time)
 		}
 	}
 
+	go func() {
+		if _, err := s.FetchProfile(ctx, peerID); err != nil {
+			fmt.Printf("Error fetching profile for peer %s: %v\n", peerID, err)
+		}
+	}()
+
 	return posts, nil
 }
 

@@ -74,14 +74,17 @@ make ui-dev
 
 ## Daemon API
 
-| Endpoint       | Method    | Description                          |
-|----------------|-----------|--------------------------------------|
-| `/api/status`  | GET       | Daemon info, peer ID, addresses      |
-| `/api/feed`    | GET       | All posts (merged, time-sorted)      |
-| `/api/posts`   | POST      | Create new post                      |
-| `/api/peers`   | GET       | Discovered peers with status         |
-| `/api/profile` | GET/POST  | Get or update profile                |
-| `/api/events`  | WebSocket | Real-time events                     |
+| Endpoint           | Method    | Description                          |
+|--------------------|-----------|--------------------------------------|
+| `/api/status`      | GET       | Daemon info, peer ID, addresses      |
+| `/api/feed`        | GET       | All posts (merged, time-sorted)      |
+| `/api/posts`       | POST      | Create new post                      |
+| `/api/peers`       | GET       | Discovered peers with status         |
+| `/api/profile`     | GET/POST  | Get or update local profile          |
+| `/api/profile/:id` | GET       | Get remote profile by peer ID        |
+| `/api/sync`        | POST      | Trigger manual sync with peers       |
+| `/api/connect`     | POST      | Connect to a peer by address         |
+| `/api/events`      | WebSocket | Real-time events                     |
 
 ### WebSocket Events
 

@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { usePeers, useConnectPeer } from '../api/hooks'
+import { usePeers, useConnectPeer, useRemoteProfile } from '../api/hooks'
+
+function PeerName({ peerId }: { peerId: string }) {
+  const { data: profile } = useRemoteProfile(peerId)
+  const displayName = profile?.displayName || 'Unknown User'
+  
+  return (
+    <span title={peerId}>{displayName}</span>
+  )
+}
 
 export function PeersScreen() {
   const { data: peers, isLoading, error, refetch } = usePeers()
@@ -50,8 +59,9 @@ export function PeersScreen() {
               <span className={`status-dot ${peer.online ? 'online' : 'offline'}`} />
               {peer.online ? 'Online' : 'Offline'}
             </div>
-            <div className="peer-id">{peer.peerId}</div>
-            {peer.address && <div className="peer-address">{peer.address}</div>}
+            <div className="peer-name">
+              <PeerName peerId={peer.peerId} />
+            </div>
           </div>
         ))}
         {peers?.length === 0 && (

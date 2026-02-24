@@ -1,9 +1,23 @@
 import { useState } from 'react'
-import { useFeed, useCreatePost } from '../api/hooks'
+import { useFeed, useCreatePost, useSyncFeed, useStatus, useProfile, useRemoteProfile } from '../api/hooks'
+
+function PostAuthor({ peerId }: { peerId: string }) {
+  const { data: status } = useStatus()
+  const isLocal = status?.peerId === peerId
+  const { data: profile } = isLocal ? useProfile() : useRemoteProfile(peerId)
+  const displayName = profile?.displayName || 'Unknown User'
+  
+  return (
+    <span className="post-author" title={"Peer ID: " + peerId}>
+      {displayName}
+    </span>
+  )
+}
 
 export function FeedScreen() {
   const { data: posts, isLoading, error } = useFeed()
   const createPost = useCreatePost()
+  const syncFeed = useSyncFeed()
   const [content, setContent] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -13,11 +27,20 @@ export function FeedScreen() {
     setContent('')
   }
 
+  const handleSync = async () => {
+    await syncFeed.mutateAsync()
+  }
+
   if (isLoading) return <div>Loading...</div>
   if (error) return <div>Error loading feed</div>
 
   return (
     <div className="feed-screen">
+      <div className="feed-header">
+        <button onClick={handleSync} disabled={syncFeed.isPending}>
+          {syncFeed.isPending ? 'Syncing...' : 'Sync'}
+        </button>
+      </div>
       <form onSubmit={handleSubmit} className="post-form">
         <textarea
           value={content}
@@ -34,7 +57,7 @@ export function FeedScreen() {
         {posts?.map((post) => (
           <div key={post.id} className="post">
             <div className="post-header">
-              <span className="post-author">{post.authorPeerId.slice(0, 8)}...</span>
+              <PostAuthor peerId={post.authorPeerId} />
               <span className="post-time">
                 {new Date(post.createdAt).toLocaleString()}
               </span>

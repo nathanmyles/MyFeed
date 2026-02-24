@@ -7,18 +7,22 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/nathanmyles/myfeed/daemon/store"
+	syncer "github.com/nathanmyles/myfeed/daemon/sync"
 )
 
 type Server struct {
 	host      host.Host
 	store     *store.Store
+	syncer    *syncer.Syncer
 	port      int
 	portFile  string
 	server    *http.Server
@@ -32,7 +36,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func NewServer(h host.Host, s *store.Store, dataDir string) (*Server, error) {
+func NewServer(h host.Host, s *store.Store, syn *syncer.Syncer, dataDir string) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
@@ -49,6 +53,7 @@ func NewServer(h host.Host, s *store.Store, dataDir string) (*Server, error) {
 	srv := &Server{
 		host:      h,
 		store:     s,
+		syncer:    syn,
 		port:      port,
 		portFile:  portFile,
 		wsClients: make(map[*websocket.Conn]bool),
@@ -61,6 +66,8 @@ func NewServer(h host.Host, s *store.Store, dataDir string) (*Server, error) {
 	mux.HandleFunc("/api/peers", srv.handlePeers)
 	mux.HandleFunc("/api/connect", srv.handleConnect)
 	mux.HandleFunc("/api/profile", srv.handleProfile)
+	mux.HandleFunc("/api/profile/", srv.handleRemoteProfile)
+	mux.HandleFunc("/api/sync", srv.handleSync)
 	mux.HandleFunc("/api/events", srv.handleEvents)
 
 	srv.server = &http.Server{
@@ -124,13 +131,11 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sorted := make([]store.Post, len(posts))
-	copy(sorted, posts)
-	for i, j := 0, len(sorted)-1; i < j; i, j = i+1, j-1 {
-		sorted[i], sorted[j] = sorted[j], sorted[i]
-	}
+	sort.Slice(posts, func(i, j int) bool {
+		return posts[i].CreatedAt.After(posts[j].CreatedAt)
+	})
 
-	s.jsonResponse(w, sorted)
+	s.jsonResponse(w, posts)
 }
 
 func (s *Server) handlePosts(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +249,38 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		s.jsonError(w, "Method not allowed", 405)
+		return
+	}
+
+	if s.syncer == nil {
+		s.jsonError(w, "Syncer not available", 500)
+		return
+	}
+
+	peers := s.store.GetKnownPeers()
+	ctx := r.Context()
+	synced := 0
+	for _, peerIDStr := range peers {
+		peerID, err := peer.Decode(peerIDStr)
+		if err != nil {
+			continue
+		}
+		if s.host.Network().Connectedness(peerID) != network.Connected {
+			continue
+		}
+		if _, err := s.syncer.FetchFeed(ctx, peerID, time.Time{}); err != nil {
+			fmt.Printf("Error syncing feed from %s: %v\n", peerIDStr, err)
+			continue
+		}
+		synced++
+	}
+
+	s.jsonResponse(w, map[string]interface{}{"syncedPeers": synced})
+}
+
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		profile, err := s.store.GetProfile()
@@ -284,6 +321,27 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.jsonError(w, "Method not allowed", 405)
+}
+
+func (s *Server) handleRemoteProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		s.jsonError(w, "Method not allowed", 405)
+		return
+	}
+
+	peerID := r.URL.Path[len("/api/profile/"):]
+	if peerID == "" {
+		s.jsonError(w, "Peer ID is required", 400)
+		return
+	}
+
+	profile, err := s.store.GetRemoteProfile(peerID)
+	if err != nil {
+		s.jsonError(w, "Failed to get profile", 500)
+		return
+	}
+
+	s.jsonResponse(w, profile)
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

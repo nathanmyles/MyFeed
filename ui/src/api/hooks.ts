@@ -42,6 +42,25 @@ export function useProfile() {
   })
 }
 
+export function useRemoteProfile(peerId: string) {
+  return useQuery({
+    queryKey: ['profile', peerId],
+    queryFn: () => api.getRemoteProfile(peerId),
+    enabled: !!peerId
+  })
+}
+
+export function useSyncFeed() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: () => api.syncFeed(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    }
+  })
+}
+
 export function useUpdateProfile() {
   const queryClient = useQueryClient()
   

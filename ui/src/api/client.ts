@@ -85,6 +85,18 @@ class ApiClient {
     return response.json()
   }
 
+  async getRemoteProfile(peerId: string): Promise<Profile> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/profile/${peerId}`)
+    return response.json()
+  }
+
+  async syncFeed(): Promise<{ syncedPeers: number }> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/sync`, { method: 'POST' })
+    return response.json()
+  }
+
   async updateProfile(displayName: string, bio: string): Promise<Profile> {
     await this.ensurePort()
     const response = await fetch(`${this.baseUrl}/api/profile`, {

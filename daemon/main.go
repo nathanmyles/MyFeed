@@ -64,7 +64,7 @@ func main() {
 	syncer := sync.NewSyncer(node.Host, store)
 	syncWorker := sync.NewSyncWorker(syncer, store, node.Host, 30*time.Second)
 
-	server, err := api.NewServer(node.Host, store, *dataDir)
+	server, err := api.NewServer(node.Host, store, syncer, *dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create API server: %v\n", err)
 		os.Exit(1)

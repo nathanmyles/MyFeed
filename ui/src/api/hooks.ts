@@ -83,3 +83,43 @@ export function useConnectPeer() {
     }
   })
 }
+
+export function useFriends() {
+  return useQuery({
+    queryKey: ['friends'],
+    queryFn: () => api.getFriends()
+  })
+}
+
+export function useSendFriendRequest() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (peerId: string) => api.sendFriendRequest(peerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+    }
+  })
+}
+
+export function useApproveFriend() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (peerId: string) => api.approveFriend(peerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+    }
+  })
+}
+
+export function useRemoveFriend() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (peerId: string) => api.removeFriend(peerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+    }
+  })
+}

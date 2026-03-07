@@ -60,13 +60,19 @@ func main() {
 	}
 	defer store.Close()
 
+	node.FriendChecker.SetStore(store)
+
 	protoHandler := protocols.NewProtocolHandler(node.Host, store)
 	protoHandler.Register()
+
+	protoHandler.SetFriendApprovedCallback(func(peerID string) {
+		fmt.Printf("Friend approved received from: %s\n", peerID)
+	})
 
 	syncer := sync.NewSyncer(node.Host, store)
 	syncWorker := sync.NewSyncWorker(syncer, store, node.Host, 30*time.Second)
 
-	server, err := api.NewServer(node, store, syncer, *dataDir)
+	server, err := api.NewServer(node, store, syncer, protoHandler, *dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create API server: %v\n", err)
 		os.Exit(1)

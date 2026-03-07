@@ -16,6 +16,8 @@ function App() {
         queryClient.invalidateQueries({ queryKey: ['feed'] })
       } else if (event.type === 'peer:discovered' || event.type === 'peer:connected' || event.type === 'peer:disconnected') {
         queryClient.invalidateQueries({ queryKey: ['peers'] })
+      } else if (event.type === 'friend:request' || event.type === 'friend:approved') {
+        queryClient.invalidateQueries({ queryKey: ['friends'] })
       }
     })
 

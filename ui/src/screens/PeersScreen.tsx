@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePeers, useConnectPeer, useRemoteProfile } from '../api/hooks'
+import { usePeers, useConnectPeer, useRemoteProfile, useSendFriendRequest, useFriends } from '../api/hooks'
 
 function PeerName({ peerId }: { peerId: string }) {
   const { data: profile } = useRemoteProfile(peerId)
@@ -10,11 +10,54 @@ function PeerName({ peerId }: { peerId: string }) {
   )
 }
 
+function PeerActions({ peerId, friendStatus, onFriendRequestSent }: { peerId: string, friendStatus: 'none' | 'pending' | 'friend', onFriendRequestSent: () => void }) {
+  const sendFriendRequest = useSendFriendRequest()
+
+  const handleAddFriend = async () => {
+    try {
+      await sendFriendRequest.mutateAsync(peerId)
+      onFriendRequestSent()
+    } catch (err) {
+      console.error('Failed to send friend request:', err)
+    }
+  }
+
+  if (friendStatus === 'friend') {
+    return <span className="friend-status">Friend</span>
+  }
+
+  if (friendStatus === 'pending') {
+    return <span className="friend-status pending">Pending</span>
+  }
+
+  return (
+    <button 
+      onClick={handleAddFriend}
+      disabled={sendFriendRequest.isPending}
+      className="add-friend-btn"
+    >
+      {sendFriendRequest.isPending ? '...' : 'Add Friend'}
+    </button>
+  )
+}
+
 export function PeersScreen() {
   const { data: peers, isLoading, error, refetch } = usePeers()
+  const { data: friendsData } = useFriends()
   const connectPeer = useConnectPeer()
   const [address, setAddress] = useState('')
   const [error2, setError] = useState('')
+  const [friendRequestSent, setFriendRequestSent] = useState('')
+
+  const getFriendStatus = (peerId: string): 'none' | 'pending' | 'friend' => {
+    if (friendsData?.friends?.some(f => f.peerId === peerId)) {
+      return 'friend'
+    }
+    if (friendsData?.pendingRequests?.some(r => r.peerId === peerId)) {
+      return 'pending'
+    }
+    return 'none'
+  }
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,15 +102,27 @@ export function PeersScreen() {
       <div className="peers-list">
         {peers?.map((peer) => (
           <div key={peer.peerId} className="peer">
-            <div className="peer-status">
-              <span className={`status-dot ${peer.online ? 'online' : 'offline'}`} />
-              {peer.online ? 'Online' : 'Offline'}
+            <div className="peer-info">
+              <div className="peer-status">
+                <span className={`status-dot ${peer.online ? 'online' : 'offline'}`} />
+                {peer.online ? 'Online' : 'Offline'}
+              </div>
+              <div className="peer-name">
+                <PeerName peerId={peer.peerId} />
+              </div>
             </div>
-            <div className="peer-name">
-              <PeerName peerId={peer.peerId} />
-            </div>
+            <PeerActions 
+              peerId={peer.peerId}
+              friendStatus={getFriendStatus(peer.peerId)}
+              onFriendRequestSent={() => setFriendRequestSent(peer.peerId)} 
+            />
           </div>
         ))}
+        {friendRequestSent && (
+          <div className="friend-request-sent">
+            Friend request sent!
+          </div>
+        )}
         {peers?.length === 0 && (
           <div className="no-peers">
             No peers connected. Enter a peer address above or wait for mDNS discovery on your local network.

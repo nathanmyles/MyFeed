@@ -26,8 +26,15 @@ export interface Status {
   connectedPeers: number
 }
 
+export interface Friend {
+  peerId: string
+  status: 'pending' | 'approved'
+  direction: 'incoming' | 'outgoing'
+  createdAt: string
+}
+
 export interface Event {
-  type: 'peer:discovered' | 'peer:connected' | 'peer:disconnected' | 'feed:updated'
+  type: 'peer:discovered' | 'peer:connected' | 'peer:disconnected' | 'feed:updated' | 'friend:request' | 'friend:approved'
   data?: unknown
 }
 
@@ -117,6 +124,50 @@ class ApiClient {
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.error || 'Failed to connect')
+    }
+    return response.json()
+  }
+
+  async getFriends(): Promise<{ friends: Friend[], pendingRequests: Friend[] }> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/friends`)
+    return response.json()
+  }
+
+  async sendFriendRequest(peerId: string): Promise<{ status: string }> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/friends`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId })
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to send friend request')
+    }
+    return response.json()
+  }
+
+  async approveFriend(peerId: string): Promise<{ status: string }> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/friends/${peerId}?action=approve`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to approve friend')
+    }
+    return response.json()
+  }
+
+  async removeFriend(peerId: string): Promise<{ status: string }> {
+    await this.ensurePort()
+    const response = await fetch(`${this.baseUrl}/api/friends/${peerId}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to remove friend')
     }
     return response.json()
   }

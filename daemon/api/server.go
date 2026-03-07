@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,20 +18,22 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/nathanmyles/myfeed/daemon/node"
+	"github.com/nathanmyles/myfeed/daemon/protocols"
 	"github.com/nathanmyles/myfeed/daemon/store"
 	syncer "github.com/nathanmyles/myfeed/daemon/sync"
 )
 
 type Server struct {
-	host      host.Host
-	node      *node.Node
-	store     *store.Store
-	syncer    *syncer.Syncer
-	port      int
-	portFile  string
-	server    *http.Server
-	wsClients map[*websocket.Conn]bool
-	wsMutex   sync.Mutex
+	host         host.Host
+	node         *node.Node
+	store        *store.Store
+	syncer       *syncer.Syncer
+	protoHandler *protocols.ProtocolHandler
+	port         int
+	portFile     string
+	server       *http.Server
+	wsClients    map[*websocket.Conn]bool
+	wsMutex      sync.Mutex
 }
 
 var upgrader = websocket.Upgrader{
@@ -38,7 +42,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func NewServer(n *node.Node, s *store.Store, syn *syncer.Syncer, dataDir string) (*Server, error) {
+func NewServer(n *node.Node, s *store.Store, syn *syncer.Syncer, ph *protocols.ProtocolHandler, dataDir string) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
@@ -53,13 +57,14 @@ func NewServer(n *node.Node, s *store.Store, syn *syncer.Syncer, dataDir string)
 	}
 
 	srv := &Server{
-		host:      n.Host,
-		node:      n,
-		store:     s,
-		syncer:    syn,
-		port:      port,
-		portFile:  portFile,
-		wsClients: make(map[*websocket.Conn]bool),
+		host:         n.Host,
+		node:         n,
+		store:        s,
+		syncer:       syn,
+		protoHandler: ph,
+		port:         port,
+		portFile:     portFile,
+		wsClients:    make(map[*websocket.Conn]bool),
 	}
 
 	mux := http.NewServeMux()
@@ -71,6 +76,8 @@ func NewServer(n *node.Node, s *store.Store, syn *syncer.Syncer, dataDir string)
 	mux.HandleFunc("/api/profile", srv.handleProfile)
 	mux.HandleFunc("/api/profile/", srv.handleRemoteProfile)
 	mux.HandleFunc("/api/sync", srv.handleSync)
+	mux.HandleFunc("/api/friends", srv.handleFriends)
+	mux.HandleFunc("/api/friends/", srv.handleFriendAction)
 	mux.HandleFunc("/api/events", srv.handleEvents)
 
 	srv.server = &http.Server{
@@ -388,6 +395,117 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+}
+
+func (s *Server) handleFriends(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		friends, err := s.store.GetFriends()
+		if err != nil {
+			s.jsonError(w, "Failed to get friends", 500)
+			return
+		}
+		pending, err := s.store.GetPendingRequests()
+		if err != nil {
+			s.jsonError(w, "Failed to get pending requests", 500)
+			return
+		}
+		s.jsonResponse(w, map[string]interface{}{
+			"friends":         friends,
+			"pendingRequests": pending,
+		})
+		return
+	}
+
+	if r.Method == "POST" {
+		var req struct {
+			PeerID string `json:"peerId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			s.jsonError(w, "Invalid request body", 400)
+			return
+		}
+		if req.PeerID == "" {
+			s.jsonError(w, "Peer ID is required", 400)
+			return
+		}
+
+		friend := &store.Friend{
+			PeerID:    req.PeerID,
+			Status:    "pending",
+			CreatedAt: time.Now(),
+		}
+		if err := s.store.SaveFriend(friend); err != nil {
+			s.jsonError(w, "Failed to send friend request", 500)
+			return
+		}
+
+		if s.protoHandler != nil {
+			pid, err := peer.Decode(req.PeerID)
+			if err == nil {
+				s.protoHandler.SendFriendRequest(context.Background(), pid)
+			}
+		}
+
+		s.BroadcastEvent("friend:request", map[string]string{"peerId": req.PeerID})
+
+		s.jsonResponse(w, map[string]string{"status": "sent"})
+		return
+	}
+
+	s.jsonError(w, "Method not allowed", 405)
+}
+
+func (s *Server) handleFriendAction(w http.ResponseWriter, r *http.Request) {
+	peerID := strings.TrimPrefix(r.URL.Path, "/api/friends/")
+	if peerID == "" {
+		s.jsonError(w, "Peer ID is required", 400)
+		return
+	}
+
+	if r.Method == "POST" {
+		action := r.URL.Query().Get("action")
+
+		if action == "approve" {
+			friend := &store.Friend{
+				PeerID:    peerID,
+				Status:    "approved",
+				CreatedAt: time.Now(),
+			}
+			if err := s.store.SaveFriend(friend); err != nil {
+				s.jsonError(w, "Failed to approve friend", 500)
+				return
+			}
+
+			profile := &store.Profile{PeerID: peerID}
+			s.store.SaveRemoteProfile(profile)
+
+			if s.protoHandler != nil {
+				pid, err := peer.Decode(peerID)
+				if err == nil {
+					s.protoHandler.SendFriendApproved(context.Background(), pid)
+				}
+			}
+
+			s.BroadcastEvent("friend:approved", map[string]string{"peerId": peerID})
+
+			s.jsonResponse(w, map[string]string{"status": "approved"})
+			return
+		}
+
+		s.jsonError(w, "Invalid action", 400)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		if err := s.store.RemoveFriend(peerID); err != nil {
+			s.jsonError(w, "Failed to remove friend", 500)
+			return
+		}
+		s.jsonResponse(w, map[string]string{"status": "removed"})
+		return
+	}
+
+	s.jsonError(w, "Method not allowed", 405)
 }
 
 func (s *Server) BroadcastEvent(eventType string, data interface{}) {

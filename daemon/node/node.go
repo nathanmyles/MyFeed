@@ -17,9 +17,28 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
 )
+
+type FriendChecker struct {
+	store interface {
+		IsFriend(peerID string) bool
+	}
+}
+
+func (f *FriendChecker) SetStore(store interface{ IsFriend(peerID string) bool }) {
+	f.store = store
+}
+
+func (f *FriendChecker) AllowReserve(p peer.ID, a multiaddr.Multiaddr) bool {
+	return f.store == nil || f.store.IsFriend(p.String())
+}
+
+func (f *FriendChecker) AllowConnect(src peer.ID, srcAddr multiaddr.Multiaddr, dest peer.ID) bool {
+	return f.store == nil || f.store.IsFriend(src.String())
+}
 
 const (
 	mdnsServiceName = "myfeed-social"
@@ -35,10 +54,11 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 }
 
 type Node struct {
-	Host    host.Host
-	DHT     *dht.IpfsDHT
-	mdnsSvc mdns.Service
-	privKey crypto.PrivKey
+	Host          host.Host
+	DHT           *dht.IpfsDHT
+	mdnsSvc       mdns.Service
+	privKey       crypto.PrivKey
+	FriendChecker *FriendChecker
 }
 
 func loadOrGenerateKey(keyPath string) (crypto.PrivKey, error) {
@@ -81,6 +101,8 @@ func New(ctx context.Context, dataDir string) (*Node, error) {
 
 	var kadDHT *dht.IpfsDHT
 
+	friendChecker := &FriendChecker{}
+
 	h, err := libp2p.New(
 		libp2p.Identity(priv),
 		libp2p.ListenAddrStrings(
@@ -93,6 +115,7 @@ func New(ctx context.Context, dataDir string) (*Node, error) {
 		libp2p.EnableHolePunching(),
 		libp2p.EnableNATService(),
 		libp2p.EnableRelay(),
+		libp2p.EnableRelayService(relay.WithACL(friendChecker)),
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 			var err error
 			kadDHT, err = dht.New(ctx, h)
@@ -106,10 +129,11 @@ func New(ctx context.Context, dataDir string) (*Node, error) {
 	mdnsSvc := mdns.NewMdnsService(h, mdnsServiceName, &discoveryNotifee{h: h, ctx: ctx})
 
 	return &Node{
-		Host:    h,
-		DHT:     kadDHT,
-		mdnsSvc: mdnsSvc,
-		privKey: priv,
+		Host:          h,
+		DHT:           kadDHT,
+		mdnsSvc:       mdnsSvc,
+		privKey:       priv,
+		FriendChecker: friendChecker,
 	}, nil
 }
 

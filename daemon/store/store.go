@@ -25,6 +25,12 @@ type Profile struct {
 	Addresses   []string `json:"addresses,omitempty"`
 }
 
+type Friend struct {
+	PeerID    string    `json:"peerId"`
+	Status    string    `json:"status"` // "pending", "approved"
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type Store struct {
 	db        *badger.DB
 	localPeer string
@@ -298,4 +304,87 @@ func (s *Store) GetKnownPeersWithProfiles() []*Profile {
 		return nil
 	})
 	return profiles
+}
+
+func (s *Store) SaveFriend(friend *Friend) error {
+	data, err := json.Marshal(friend)
+	if err != nil {
+		return err
+	}
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Set([]byte("friend:"+friend.PeerID), data)
+	})
+}
+
+func (s *Store) GetFriends() ([]Friend, error) {
+	var friends []Friend
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte("friend:")
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			var friend Friend
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &friend)
+			})
+			if err != nil {
+				continue
+			}
+			if friend.Status == "approved" {
+				friends = append(friends, friend)
+			}
+		}
+		return nil
+	})
+	return friends, err
+}
+
+func (s *Store) GetPendingRequests() ([]Friend, error) {
+	var friends []Friend
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte("friend:")
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			var friend Friend
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &friend)
+			})
+			if err != nil {
+				continue
+			}
+			if friend.Status == "pending" {
+				friends = append(friends, friend)
+			}
+		}
+		return nil
+	})
+	return friends, err
+}
+
+func (s *Store) IsFriend(peerID string) bool {
+	var friend Friend
+	err := s.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("friend:" + peerID))
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &friend)
+		})
+	})
+	if err != nil {
+		return false
+	}
+	return friend.Status == "approved"
+}
+
+func (s *Store) RemoveFriend(peerID string) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete([]byte("friend:" + peerID))
+	})
 }

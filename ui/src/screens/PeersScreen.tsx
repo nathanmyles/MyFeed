@@ -52,8 +52,8 @@ export function PeersScreen() {
           <button type="submit" disabled={connectPeer.isPending || !address.trim()}>
             {connectPeer.isPending ? 'Connecting...' : 'Add Friend'}
           </button>
-          {error2 && <div className="connect-error">{error2}</div>}
         </form>
+        {error2 && <div className="connect-error">{error2}</div>}
       </div>
 
       <div className="peers-list">

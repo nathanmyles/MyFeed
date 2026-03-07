@@ -92,6 +92,7 @@ func New(ctx context.Context, dataDir string) (*Node, error) {
 		libp2p.NATPortMap(),
 		libp2p.EnableHolePunching(),
 		libp2p.EnableNATService(),
+		libp2p.EnableRelay(),
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 			var err error
 			kadDHT, err = dht.New(ctx, h)

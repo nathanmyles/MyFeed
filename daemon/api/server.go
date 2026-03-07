@@ -253,6 +253,8 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Printf("[daemon] Connected to new peer: %s\n", peerInfo.ID.String())
+
 	profile := &store.Profile{
 		PeerID:    peerInfo.ID.String(),
 		Addresses: []string{req.Address},

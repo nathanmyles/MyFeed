@@ -114,6 +114,10 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address })
     })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to connect')
+    }
     return response.json()
   }
 

@@ -32,9 +32,11 @@ export function ProfileScreen() {
       </div>
 
       <div className="peer-address-section">
-        <label>Your Address:</label>
-        <code className="peer-address">{status?.addresses?.[0]}</code>
-        <small>Share this with friends on different networks to connect</small>
+        <label>Your Addresses:</label>
+        {status?.addresses?.map((addr, i) => (
+          <code key={i} className="peer-address">{addr}</code>
+        ))}
+        <small>Share a local address (192.168.x.x) with friends on the same network, or public address for remote connections</small>
       </div>
 
       <form onSubmit={handleSubmit} className="profile-form">
